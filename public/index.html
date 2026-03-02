@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp Bot Panel</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #00ff88;
+    --dark-green: #00cc6a;
+    --bg: #030d07;
+    --card: #071a0f;
+    --card2: #0a2417;
+    --border: #0f3a1e;
+    --text: #c8ffd9;
+    --muted: #4a8c65;
+    --red: #ff4466;
+    --cyan: #00ffe0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 20% 50%, rgba(0,255,136,0.05) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 20px; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 30px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green), var(--cyan), transparent);
+    animation: scan 3s linear infinite;
+  }
+  @keyframes scan { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+  .logo { display: flex; align-items: center; gap: 16px; }
+  .logo-icon {
+    width: 52px; height: 52px;
+    background: linear-gradient(135deg, var(--green), var(--cyan));
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    box-shadow: 0 0 30px rgba(0,255,136,0.4);
+  }
+  .logo-text h1 { font-size: 24px; font-weight: 700; color: var(--green); letter-spacing: 2px; text-transform: uppercase; }
+  .logo-text p { font-size: 13px; color: var(--muted); font-family: 'Share Tech Mono', monospace; }
+  .status-badge {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 20px; border-radius: 100px;
+    font-size: 14px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  }
+  .status-badge.online { background: rgba(0,255,136,0.1); border: 1px solid var(--green); color: var(--green); }
+  .status-badge.offline { background: rgba(255,68,102,0.1); border: 1px solid var(--red); color: var(--red); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .status-badge.online .status-dot { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.5s infinite; }
+  .status-badge.offline .status-dot { background: var(--red); }
+  @keyframes pulse { 0%, 100% { opacity:1; transform:scale(1); } 50% { opacity:0.5; transform:scale(0.8); } }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; position: relative; transition: all 0.3s; }
+  .card:hover { border-color: rgba(0,255,136,0.3); }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  @media (max-width: 900px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+  .stat-value { font-size: 36px; font-weight: 700; color: var(--green); font-family: 'Share Tech Mono', monospace; }
+  .stat-label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .section-title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .section-title span { width: 4px; height: 24px; background: var(--green); border-radius: 2px; display: inline-block; }
+  .toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .toggle-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--card2); border: 1px solid var(--border); border-radius: 12px; transition: all 0.3s; }
+  .toggle-item:hover { border-color: var(--green); }
+  .toggle-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .toggle-desc { font-size: 11px; color: var(--muted); }
+  .switch { position: relative; width: 48px; height: 26px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: var(--card2); border: 1px solid var(--border); border-radius: 100px; cursor: pointer; transition: 0.3s; }
+  .slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: var(--muted); border-radius: 50%; transition: 0.3s; }
+  input:checked + .slider { background: rgba(0,255,136,0.15); border-color: var(--green); }
+  input:checked + .slider::before { transform: translateX(22px); background: var(--green); box-shadow: 0 0 10px rgba(0,255,136,0.6); }
+  .log-container { background: var(--card2); border-radius: 12px; padding: 16px; height: 280px; overflow-y: auto; font-family: 'Share Tech Mono', monospace; font-size: 13px; }
+  .log-container::-webkit-scrollbar { width: 4px; }
+  .log-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .log-entry { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; gap: 12px; }
+  .log-time { color: var(--muted); flex-shrink: 0; }
+  .log-cmd { color: var(--cyan); }
+  .log-from { color: var(--green); }
+  .commands-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .cmd-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--card2); border-radius: 10px; border: 1px solid transparent; }
+  .cmd-badge { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--green); background: rgba(0,255,136,0.08); padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+  .cmd-desc { font-size: 12px; color: var(--muted); }
+  .emoji-btn { width: 40px; height: 40px; border: 1px solid var(--border); background: var(--card2); border-radius: 10px; cursor: pointer; font-size: 20px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+  .emoji-btn:hover, .emoji-btn.active { border-color: var(--green); background: rgba(0,255,136,0.1); transform: scale(1.1); }
+  .emoji-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  #toast { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+  .toast-msg { background: var(--card2); border: 1px solid var(--green); color: var(--green); padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; animation: slideIn 0.3s ease; max-width: 300px; }
+  @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  /* Login */
+  #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; }
+  .login-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 48px; width: 100%; max-width: 460px; }
+  .login-card h2 { font-size: 28px; font-weight: 700; color: var(--green); letter-spacing: 2px; margin-bottom: 8px; text-align:center; }
+  .login-card > p { color: var(--muted); margin-bottom: 24px; text-align:center; }
+  .section-box { background: rgba(0,255,136,0.04); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .section-box p.label { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .input-group { margin-bottom: 14px; }
+  .input-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: 1px; text-transform: uppercase; }
+  .input-group input { width: 100%; padding: 13px 16px; background: var(--card2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 15px; outline: none; transition: all 0.3s; }
+  .input-group input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(0,255,136,0.1); }
+  .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-family: 'Rajdhani', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.3s; }
+  .btn-primary { background: linear-gradient(135deg, var(--green), var(--dark-green)); color: #000; }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,255,136,0.3); }
+  /* Pair Code */
+  #connect-screen { display: none; flex-direction: column; align-items: center; gap: 20px; }
+  .pair-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 40px; max-width: 500px; width: 100%; text-align: center; }
+  .pair-code-display { font-family: 'Share Tech Mono', monospace; font-size: 36px; font-weight: 700; color: var(--green); letter-spacing: 8px; padding: 24px; background: var(--card2); border: 2px solid var(--green); border-radius: 16px; margin: 20px 0; text-shadow: 0 0 20px rgba(0,255,136,0.5); animation: glow 2s ease-in-out infinite; }
+  @keyframes glow { 0%, 100% { box-shadow: 0 0 20px rgba(0,255,136,0.2); } 50% { box-shadow: 0 0 40px rgba(0,255,136,0.5); } }
+  .steps { text-align: left; background: var(--card2); border-radius: 12px; padding: 20px; margin-top: 16px; }
+  .steps p { padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; font-size: 14px; }
+  .steps p:last-child { border: none; }
+  .step-num { background: var(--green); color: #000; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .number-tag { font-family: 'Share Tech Mono', monospace; font-size: 16px; color: var(--cyan); background: rgba(0,255,224,0.08); border: 1px solid rgba(0,255,224,0.2); padding: 4px 12px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🤖</div>
+      <div class="logo-text">
+        <h1>WA Bot Panel</h1>
+        <p>Sinhala WhatsApp Bot Control Center</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <span id="connected-number" class="number-tag" style="display:none;"></span>
+      <div class="status-badge offline" id="status-badge">
+        <div class="status-dot"></div><span>OFFLINE</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- LOGIN -->
+  <div id="login-screen">
+    <div class="login-card">
+      <h2>🔐 PANEL LOGIN</h2>
+      <p>Bot connect කර OTP එකෙන් login වන්න</p>
+
+      <div class="section-box">
+        <p class="label">🆕 STEP 1 — Bot Connect කරන්න</p>
+        <div class="input-group">
+          <label>WhatsApp Number (94xxxxxxxxx)</label>
+          <input type="text" id="connect-number" placeholder="94771234567">
+        </div>
+        <button class="btn btn-primary" onclick="connectBot()">⚡ Bot Connect කරන්න</button>
+      </div>
+
+      <div class="section-box">
+        <p class="label">🔑 STEP 2 — OTP Login</p>
+        <div class="input-group">
+          <label>WhatsApp Number</label>
+          <input type="text" id="login-number" placeholder="94771234567">
+        </div>
+        <div class="input-group">
+          <label>OTP (WhatsApp inbox check කරන්න)</label>
+          <input type="text" id="login-otp" placeholder="123456" maxlength="6">
+        </div>
+        <button class="btn btn-primary" onclick="doLogin()">🚀 Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAIR CODE -->
+  <div id="connect-screen">
+    <div class="pair-card">
+      <h2 style="color:var(--green);font-size:24px;letter-spacing:2px;">📱 PAIR CODE</h2>
+      <p style="color:var(--muted);margin-top:8px;">WhatsApp හි Linked Devices වලින් code දාන්න</p>
+      <div class="pair-code-display" id="pair-code-display">⏳ Generating...</div>
+      <div class="steps">
+        <p><span class="step-num">1</span> WhatsApp open කරන්න</p>
+        <p><span class="step-num">2</span> Settings → Linked Devices</p>
+        <p><span class="step-num">3</span> Link a Device click</p>
+        <p><span class="step-num">4</span> "Link with phone number" select</p>
+        <p><span class="step-num">5</span> ඉහළ code දාන්න</p>
+      </div>
+      <p style="color:var(--muted);font-size:13px;margin-top:16px;">Connected වූ පසු OTP WhatsApp inbox check කරන්න</p>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard" style="display:none;">
+    <div class="grid-3">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <span class="card-title">Commands Used</span><span style="font-size:22px;">⌨️</span>
+        </div>
+        <div class="stat-value" id="stat-commands">0</div>
+        <div class="stat-label">Total commands</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <span class="card-title">Saved Users</span><span style="font-size:22px;">👥</span>
+        </div>
+        <div class="stat-value" id="stat-users">0</div>
+        <div class="stat-label">Registered users</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <span class="card-title">Bot Status</span><span style="font-size:22px;">🟢</span>
+        </div>
+        <div class="stat-value" style="font-size:22px;" id="stat-status">OFFLINE</div>
+        <div class="stat-label" id="stat-number">Not connected</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="section-title"><span></span> Bot Settings</div>
+        <div class="toggle-grid">
+          <div class="toggle-item">
+            <div><div class="toggle-name">👁 Auto Seen</div><div class="toggle-desc">Messages auto read</div></div>
+            <label class="switch"><input type="checkbox" id="toggle-AUTO_SEEN" onchange="toggleSetting('AUTO_SEEN',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-item">
+            <div><div class="toggle-name">💬 Auto Reply Status</div><div class="toggle-desc">Status viewers notify</div></div>
+            <label class="switch"><input type="checkbox" id="toggle-AUTO_REPLY_STATUS" onchange="toggleSetting('AUTO_REPLY_STATUS',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-item">
+            <div><div class="toggle-name">❤️ Auto Like Status</div><div class="toggle-desc">Status auto react</div></div>
+            <label class="switch"><input type="checkbox" id="toggle-AUTO_LIKE_STATUS" onchange="toggleSetting('AUTO_LIKE_STATUS',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-item">
+            <div><div class="toggle-name">🟢 Always Online</div><div class="toggle-desc">Always appear online</div></div>
+            <label class="switch"><input type="checkbox" id="toggle-ALWAYS_ONLINE" onchange="toggleSetting('ALWAYS_ONLINE',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-item">
+            <div><div class="toggle-name">⌨️ Auto Typing</div><div class="toggle-desc">Show typing indicator</div></div>
+            <label class="switch"><input type="checkbox" id="toggle-AUTO_TYPING" onchange="toggleSetting('AUTO_TYPING',this.checked)"><span class="slider"></span></label>
+          </div>
+          <div class="toggle-item">
+            <div><div class="toggle-name">💾 Status Save</div><div class="toggle-desc">Save status media</div></div>
+            <label class="switch"><input type="checkbox" id="toggle-STATUS_SAVE" onchange="toggleSetting('STATUS_SAVE',this.checked)"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div style="margin-top:20px;">
+          <div class="card-title" style="margin-bottom:10px;">❤️ Status Like Emoji</div>
+          <div class="emoji-row">
+            <button class="emoji-btn active" onclick="setEmoji(this,'❤️')">❤️</button>
+            <button class="emoji-btn" onclick="setEmoji(this,'🔥')">🔥</button>
+            <button class="emoji-btn" onclick="setEmoji(this,'😍')">😍</button>
+            <button class="emoji-btn" onclick="setEmoji(this,'👍')">👍</button>
+            <button class="emoji-btn" onclick="setEmoji(this,'🥰')">🥰</button>
+            <button class="emoji-btn" onclick="setEmoji(this,'💯')">💯</button>
+            <button class="emoji-btn" onclick="setEmoji(this,'⚡')">⚡</button>
+            <button class="emoji-btn" onclick="setEmoji(this,'🎉')">🎉</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title"><span></span> Command Log</div>
+        <div class="log-container" id="command-log">
+          <div style="color:var(--muted);text-align:center;margin-top:40px;">Commands display වෙනවා...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title"><span></span> All Commands</div>
+      <div class="commands-grid">
+        <div class="cmd-item"><span class="cmd-badge">.help</span><span class="cmd-desc">Full menu show</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.ping</span><span class="cmd-desc">Bot speed check</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.info</span><span class="cmd-desc">Bot information</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.img blur/grayscale/invert...</span><span class="cmd-desc">Image edit</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.autoseen on/off</span><span class="cmd-desc">Auto read messages</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.autoreply on/off</span><span class="cmd-desc">Status auto reply</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.autolike on/off</span><span class="cmd-desc">Status auto like</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.likeemoji [emoji]</span><span class="cmd-desc">Change like emoji</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.online on/off</span><span class="cmd-desc">Always online mode</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.typing on/off</span><span class="cmd-desc">Auto typing show</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.save</span><span class="cmd-desc">Status save toggle</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.setprefix [x]</span><span class="cmd-desc">Change prefix char</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.broadcast [msg]</span><span class="cmd-desc">All groups message</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.settings</span><span class="cmd-desc">Current settings</span></div>
+        <div class="cmd-item"><span class="cmd-badge">.save [name] [age] [city]</span><span class="cmd-desc">Save user info</span></div>
+        <div class="cmd-item"><span class="cmd-badge">hi</span><span class="cmd-desc">Auto greet + register</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+const socket = io();
+let commandCount = 0;
+
+socket.on('state', (data) => {
+  if (data.connected) updateConnectionStatus(true, data.number);
+  if (data.settings) updateToggles(data.settings);
+  if (data.pairCode) showPairCode(data.pairCode);
+  if (data.commandLog) { data.commandLog.forEach(addLogEntry); commandCount = data.commandLog.length; document.getElementById('stat-commands').textContent = commandCount; }
+});
+socket.on('pair_code', (code) => { showPairCodeScreen(); showPairCode(code); });
+socket.on('connected', (data) => { updateConnectionStatus(true, data.number); toast('✅ Bot connected!'); });
+socket.on('disconnected', () => { updateConnectionStatus(false); toast('❌ Bot disconnected!'); });
+socket.on('settings_update', (s) => updateToggles(s));
+socket.on('command_used', (e) => { addLogEntry(e); commandCount++; document.getElementById('stat-commands').textContent = commandCount; });
+socket.on('otp', (otp) => toast('🔐 OTP WhatsApp inbox check කරන්න!'));
+socket.on('user_saved', () => { fetch('/api/users').then(r=>r.json()).then(u => { document.getElementById('stat-users').textContent = u.length; }); });
+socket.on('login_success', ({ number }) => {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('connect-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  toast('🎉 Login successful!');
+  loadStats();
+});
+socket.on('login_fail', ({ message }) => toast('❌ ' + message));
+socket.on('error', ({ message }) => toast('❌ ' + message));
+
+function connectBot() {
+  const number = document.getElementById('connect-number').value.trim();
+  if (!number || number.length < 10) { toast('⚠️ Valid number දාන්න!'); return; }
+  socket.emit('start_bot', { number });
+  showPairCodeScreen();
+  toast('⏳ Pair code wait කරන්න...');
+}
+function doLogin() {
+  const number = document.getElementById('login-number').value.trim();
+  const otp = document.getElementById('login-otp').value.trim();
+  if (!number || !otp) { toast('⚠️ Number සහ OTP දෙකම දාන්න!'); return; }
+  socket.emit('login', { number, otp });
+}
+function showPairCodeScreen() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('connect-screen').style.display = 'flex';
+}
+function showPairCode(code) {
+  const formatted = code.replace(/(.{4})/g, '$1-').slice(0,-1);
+  document.getElementById('pair-code-display').textContent = formatted || code;
+}
+function updateConnectionStatus(connected, number='') {
+  const badge = document.getElementById('status-badge');
+  const numTag = document.getElementById('connected-number');
+  if (connected) {
+    badge.className = 'status-badge online';
+    badge.innerHTML = '<div class="status-dot"></div><span>ONLINE</span>';
+    document.getElementById('stat-status').textContent = 'ONLINE';
+    document.getElementById('stat-status').style.color = 'var(--green)';
+    document.getElementById('stat-number').textContent = number;
+    if (number) { numTag.textContent = '+' + number; numTag.style.display = 'inline'; }
+  } else {
+    badge.className = 'status-badge offline';
+    badge.innerHTML = '<div class="status-dot"></div><span>OFFLINE</span>';
+    document.getElementById('stat-status').textContent = 'OFFLINE';
+    document.getElementById('stat-status').style.color = 'var(--red)';
+    numTag.style.display = 'none';
+  }
+}
+function updateToggles(settings) {
+  ['AUTO_SEEN','AUTO_REPLY_STATUS','AUTO_LIKE_STATUS','ALWAYS_ONLINE','AUTO_TYPING','STATUS_SAVE'].forEach(k => {
+    const el = document.getElementById('toggle-' + k);
+    if (el) el.checked = !!settings[k];
+  });
+}
+function toggleSetting(key, value) {
+  socket.emit('update_setting', { key, value });
+  toast('✅ ' + key + ': ' + (value ? 'ON' : 'OFF'));
+}
+function setEmoji(btn, emoji) {
+  document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  socket.emit('update_setting', { key: 'AUTO_LIKE_EMOJI', value: emoji });
+  toast('✅ Like emoji: ' + emoji);
+}
+function addLogEntry(entry) {
+  const log = document.getElementById('command-log');
+  const placeholder = log.querySelector('div[style]');
+  if (placeholder) placeholder.remove();
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  const time = new Date(entry.time).toLocaleTimeString();
+  const from = (entry.from || '').split('@')[0];
+  el.innerHTML = '<span class="log-time">' + time + '</span><span class="log-cmd">.' + entry.cmd + '</span><span class="log-from">' + from + '</span>';
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+function loadStats() {
+  fetch('/api/users').then(r=>r.json()).then(u => { document.getElementById('stat-users').textContent = u.length; });
+}
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast-msg';
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+</script>
+</body>
+</html>
