@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WA-BOT | Connect</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root {
+    --green: #00ff88;
+    --green2: #00cc66;
+    --dark: #050f0a;
+    --dark2: #0a1f14;
+    --card: #0d2b1a;
+    --border: #0f4024;
+    --text: #c8ffd8;
+    --glow: 0 0 20px rgba(0,255,136,0.4);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--dark);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image: linear-gradient(rgba(0,255,136,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,136,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridMove 20s linear infinite;
+  }
+  @keyframes gridMove { 0%{transform:translateY(0)} 100%{transform:translateY(40px)} }
+
+  .container {
+    position: relative;
+    width: 460px;
+    padding: 40px;
+    background: rgba(13,43,26,0.9);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    box-shadow: var(--glow), 0 0 60px rgba(0,255,136,0.1);
+  }
+  .logo { text-align: center; margin-bottom: 28px; }
+  .logo h1 {
+    font-family: 'Orbitron', sans-serif;
+    color: var(--green);
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    text-shadow: var(--glow);
+  }
+  .logo p { color: #5a9a6a; font-size: 13px; margin-top: 4px; }
+
+  .steps {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .step {
+    flex: 1;
+    text-align: center;
+    padding: 10px 6px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+    color: #5a9a6a;
+    transition: all 0.3s;
+  }
+  .step.active { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.05); }
+  .step .num { font-family: 'Orbitron', sans-serif; font-size: 18px; display: block; margin-bottom: 2px; }
+
+  label { display: block; color: var(--green); font-size: 13px; font-weight: 600; letter-spacing: 1px; margin-bottom: 8px; text-transform: uppercase; }
+  input {
+    width: 100%;
+    padding: 14px 16px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 16px;
+    transition: all 0.3s;
+  }
+  input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 15px rgba(0,255,136,0.2); }
+  input::placeholder { color: #2a5a3a; }
+
+  .btn {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(135deg, var(--green), var(--green2));
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-top: 14px;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: var(--glow); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .code-box {
+    display: none;
+    margin-top: 24px;
+    text-align: center;
+  }
+  .code-box.show { display: block; }
+  .code-label { color: #5a9a6a; font-size: 13px; margin-bottom: 12px; letter-spacing: 1px; }
+  .pair-code {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--green);
+    letter-spacing: 8px;
+    text-shadow: var(--glow);
+    background: rgba(0,0,0,0.4);
+    border: 2px solid var(--green);
+    border-radius: 12px;
+    padding: 20px;
+    animation: codePulse 1.5s ease-in-out infinite;
+  }
+  @keyframes codePulse { 0%,100%{box-shadow:var(--glow)} 50%{box-shadow:0 0 40px rgba(0,255,136,0.7)} }
+  
+  .instructions {
+    margin-top: 16px;
+    background: rgba(0,255,136,0.04);
+    border: 1px solid rgba(0,255,136,0.1);
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 13px;
+    color: #7abf8a;
+    line-height: 2;
+    text-align: left;
+  }
+  .instructions strong { color: var(--green); }
+
+  .success-box {
+    display: none;
+    margin-top: 24px;
+    text-align: center;
+    padding: 24px;
+    background: rgba(0,255,136,0.05);
+    border: 1px solid rgba(0,255,136,0.3);
+    border-radius: 12px;
+  }
+  .success-box.show { display: block; }
+  .success-icon { font-size: 48px; display: block; margin-bottom: 12px; }
+  .success-box h3 { color: var(--green); font-size: 20px; font-family: 'Orbitron', sans-serif; }
+  .success-box p { color: #7abf8a; font-size: 13px; margin-top: 8px; }
+
+  .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #000; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  
+  .back-link { text-align: center; margin-top: 20px; font-size: 13px; }
+  .back-link a { color: var(--green); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <h1>🤖 WA-BOT</h1>
+    <p>CONNECT YOUR WHATSAPP</p>
+  </div>
+
+  <div class="steps">
+    <div class="step active" id="s1"><span class="num">1</span>Number</div>
+    <div class="step" id="s2"><span class="num">2</span>Pair Code</div>
+    <div class="step" id="s3"><span class="num">3</span>Connected</div>
+  </div>
+
+  <div id="numberSection">
+    <label>📞 WhatsApp Number (Country Code සමඟ)</label>
+    <input type="tel" id="phoneNumber" placeholder="94771234567" />
+    <button class="btn" id="connectBtn" onclick="getPairCode()">⚡ GET PAIR CODE</button>
+  </div>
+
+  <div class="code-box" id="codeBox">
+    <div class="code-label">📱 WhatsApp Settings → Linked Devices → Link a Device → Enter this code:</div>
+    <div class="pair-code" id="pairCode">----</div>
+    <div class="instructions">
+      <strong>Steps:</strong><br>
+      1️⃣ WhatsApp open කරන්න<br>
+      2️⃣ ⋮ Menu → <strong>Linked Devices</strong><br>
+      3️⃣ <strong>Link a Device</strong> click කරන්න<br>
+      4️⃣ "Link with phone number instead" click<br>
+      5️⃣ ඉහළ code එක type කරන්න<br>
+      ✅ Bot automatically connect වෙයි!
+    </div>
+  </div>
+
+  <div class="success-box" id="successBox">
+    <span class="success-icon">✅</span>
+    <h3>BOT CONNECTED!</h3>
+    <p>ඔබේ WhatsApp inbox check කරන්න.<br>OTP code ලැබෙනවා.</p>
+    <button class="btn" style="margin-top:16px" onclick="window.location.href='/login'">🔑 LOGIN NOW →</button>
+  </div>
+
+  <div class="back-link" id="backLink">
+    Already connected? <a href="/login">Login →</a>
+  </div>
+</div>
+
+<script>
+const socket = io();
+
+socket.on('pairingCode', (data) => {
+  document.getElementById('pairCode').textContent = data.code;
+  document.getElementById('codeBox').classList.add('show');
+  document.getElementById('s2').classList.add('active');
+});
+
+socket.on('botConnected', () => {
+  document.getElementById('codeBox').classList.remove('show');
+  document.getElementById('successBox').classList.add('show');
+  document.getElementById('s3').classList.add('active');
+  document.getElementById('backLink').style.display = 'none';
+});
+
+socket.on('statusUpdate', (data) => {
+  if (data.status === 'connected') {
+    document.getElementById('codeBox').classList.remove('show');
+    document.getElementById('successBox').classList.add('show');
+    document.getElementById('s3').classList.add('active');
+  } else if (data.pairingCode) {
+    document.getElementById('pairCode').textContent = data.pairingCode;
+    document.getElementById('codeBox').classList.add('show');
+    document.getElementById('s2').classList.add('active');
+  }
+});
+
+async function getPairCode() {
+  const number = document.getElementById('phoneNumber').value.trim();
+  if (!number || number.length < 10) { alert('Valid number enter කරන්න!'); return; }
+  
+  const btn = document.getElementById('connectBtn');
+  btn.innerHTML = '<span class="loading"></span>Connecting...';
+  btn.disabled = true;
+
+  const res = await fetch('/api/pair', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ number })
+  });
+  const data = await res.json();
+  
+  if (data.success) {
+    document.getElementById('pairCode').textContent = data.code;
+    document.getElementById('codeBox').classList.add('show');
+    document.getElementById('numberSection').style.opacity = '0.5';
+    document.getElementById('s2').classList.add('active');
+    btn.innerHTML = '⏳ Waiting for WhatsApp...';
+  } else {
+    alert('Error: ' + data.message);
+    btn.innerHTML = '⚡ GET PAIR CODE';
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
