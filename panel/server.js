@@ -4,246 +4,136 @@ const http = require('http');
 const { Server } = require('socket.io');
 const fs = require('fs-extra');
 const path = require('path');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const simpleGit = require('simple-git');
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore
+} = require('@whiskeysockets/baileys');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
-const AUTH_DIR = path.join(__dirname, '../auth_info');
-const CONFIG_FILE = '../src/config.js';
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const AUTH_DIR   = path.join(__dirname, '..', 'auth_info');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
-  secret: 'wabot-panel-secret-2024',
+  secret: 'wabot-secret-2024',
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(PUBLIC_DIR));
 
-// ── Auth Middleware ──────────────────────────────────────
 function requireAuth(req, res, next) {
   if (req.session && req.session.authenticated) return next();
-  // Check if bot is already connected - if yes go to login, else go to connect
-  const statusFile = AUTH_DIR + '/pairing_status.json';
-  const fs2 = require('fs');
-  try {
-    const status = JSON.parse(fs2.readFileSync(statusFile, 'utf8'));
-    if (status.status === 'connected') return res.redirect('/login');
-  } catch(e) {}
-  res.redirect('/connect');
+  res.redirect('/login');
 }
 
-// ── Routes ──────────────────────────────────────────────
-app.get('/', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public/login.html')));
-app.get('/connect', (req, res) => res.sendFile(path.join(__dirname, 'public/connect.html')));
+// Page Routes
+app.get('/', requireAuth, (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
+app.get('/login', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'login.html')));
+app.get('/connect', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'connect.html')));
 
+// API: Login
 app.post('/api/login', (req, res) => {
   const { number, otp } = req.body;
   try {
-    const otpData = fs.readJsonSync(`${AUTH_DIR}/otp.json`);
-    const status = fs.readJsonSync(`${AUTH_DIR}/pairing_status.json`);
-    const botNum = status.number?.replace(/[^0-9]/g, '');
-    const inputNum = number?.replace(/[^0-9]/g, '');
-    const isOtpValid = otpData.otp === otp && (Date.now() - otpData.time) < 10 * 60 * 1000; // 10 min
-    const isNumValid = botNum && inputNum && (botNum.includes(inputNum) || inputNum.includes(botNum));
-
-    if (isOtpValid && isNumValid) {
+    const otpData    = fs.readJsonSync(path.join(AUTH_DIR, 'otp.json'));
+    const statusData = fs.readJsonSync(path.join(AUTH_DIR, 'pairing_status.json'));
+    const botNum   = (statusData.number || '').replace(/[^0-9]/g, '');
+    const inputNum = (number || '').replace(/[^0-9]/g, '');
+    const otpValid = otpData.otp === otp && (Date.now() - otpData.time) < 10 * 60 * 1000;
+    const numValid = botNum && inputNum && (botNum.includes(inputNum) || inputNum.includes(botNum));
+    if (otpValid && numValid) {
       req.session.authenticated = true;
       req.session.number = number;
       res.json({ success: true });
     } else {
-      res.json({ success: false, message: 'Invalid number or OTP' });
+      res.json({ success: false, message: 'OTP හෝ Number වැරදියි!' });
     }
   } catch (e) {
-    res.json({ success: false, message: 'Bot not connected yet. Connect bot first.' });
+    res.json({ success: false, message: 'Bot connect කරලා නෑ. කලින් /connect යන්න!' });
   }
 });
 
-app.get('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/login');
+app.get('/api/logout', (req, res) => { req.session.destroy(); res.redirect('/login'); });
+
+app.get('/api/status', (req, res) => {
+  try { res.json(fs.readJsonSync(path.join(AUTH_DIR, 'pairing_status.json'))); }
+  catch (e) { res.json({ status: 'disconnected' }); }
 });
 
-// ── Bot Status ───────────────────────────────────────────
-app.get('/api/status', requireAuth, (req, res) => {
-  try {
-    const status = fs.readJsonSync(`${AUTH_DIR}/pairing_status.json`);
-    res.json(status);
-  } catch (e) {
-    res.json({ status: 'disconnected' });
-  }
-});
-
-// ── Get Config ───────────────────────────────────────────
-app.get('/api/config', requireAuth, (req, res) => {
-  try {
-    // Read config and send as JSON
-    delete require.cache[require.resolve('../src/config')];
-    const cfg = require('../src/config');
-    res.json({ success: true, config: cfg });
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
-});
-
-// ── Save Config ──────────────────────────────────────────
-app.post('/api/config', requireAuth, (req, res) => {
-  try {
-    const updates = req.body;
-    const configPath = path.join(__dirname, '../src/config.js');
-    let content = fs.readFileSync(configPath, 'utf8');
-
-    // Update boolean values
-    const boolKeys = ['alwaysOnline', 'autoTyping', 'autoSeen', 'autoStatusSeen', 'autoStatusLike', 'autoStatusSave', 'autoStatusReply', 'greetingAutoReply'];
-    boolKeys.forEach(key => {
-      if (updates[key] !== undefined) {
-        const val = updates[key] === 'true' || updates[key] === true;
-        content = content.replace(new RegExp(`(${key}:\\s*)(true|false)`), `$1${val}`);
-      }
-    });
-
-    // Update string values
-    const strKeys = ['autoStatusLikeEmoji', 'autoStatusReplyMessage', 'botName', 'panelUrl', 'githubRepo', 'prefix'];
-    strKeys.forEach(key => {
-      if (updates[key] !== undefined) {
-        content = content.replace(new RegExp(`(${key}:\\s*')[^']*(')`), `$1${updates[key]}$2`);
-      }
-    });
-
-    fs.writeFileSync(configPath, content);
-    res.json({ success: true, message: 'Settings saved!' });
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
-});
-
-// ── Pair Code Generation ─────────────────────────────────
+// API: Pair Code
 let pairSocket = null;
 
 app.post('/api/pair', async (req, res) => {
   const { number } = req.body;
-  if (!number) return res.json({ success: false, message: 'Number required' });
-
+  if (!number) return res.json({ success: false, message: 'Number දාන්න!' });
   try {
-    // Clean number
     const cleanNumber = number.replace(/[^0-9]/g, '');
-
-    // Start new session
-    if (pairSocket) {
-      try { pairSocket.end(); } catch (e) {}
-      pairSocket = null;
-    }
-
-    await fs.remove('../auth_info');
-    await fs.ensureDir('../auth_info');
-
-    const { state, saveCreds } = await useMultiFileAuthState('../auth_info');
+    if (pairSocket) { try { pairSocket.end(); } catch (e) {} pairSocket = null; }
+    await fs.remove(AUTH_DIR);
+    await fs.ensureDir(AUTH_DIR);
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion();
     const logger = pino({ level: 'silent' });
-
-    pairSocket = makeWASocket({
-      version,
-      logger,
-      printQRInTerminal: false,
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, logger)
-      },
-      browser: ['Bot', 'Chrome', '3.0'],
-    });
-
+    pairSocket = makeWASocket({ version, logger, printQRInTerminal: false,
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
+      browser: ['WA-BOT', 'Chrome', '3.0'] });
     pairSocket.ev.on('creds.update', saveCreds);
-
-    // Request pairing code
+    await new Promise(r => setTimeout(r, 2000));
     if (!pairSocket.authState.creds.registered) {
       const code = await pairSocket.requestPairingCode(cleanNumber);
       const formatted = code?.match(/.{1,4}/g)?.join('-') || code;
-      fs.writeJsonSync('../auth_info/pairing_status.json', { pairingCode: formatted, status: 'pending', number: cleanNumber });
-
-      // Emit to socket.io
+      fs.writeJsonSync(path.join(AUTH_DIR, 'pairing_status.json'), { pairingCode: formatted, status: 'pending', number: cleanNumber });
       io.emit('pairingCode', { code: formatted });
-
       res.json({ success: true, code: formatted });
+    } else {
+      res.json({ success: false, message: 'Already registered!' });
     }
-
-    pairSocket.ev.on('connection.update', (update) => {
-      const { connection } = update;
-      if (connection === 'open') {
-        io.emit('botConnected', { number: cleanNumber });
+    pairSocket.ev.on('connection.update', async (update) => {
+      if (update.connection === 'open') {
+        const botJid = pairSocket.user?.id || '';
+        const botNum = botJid.split(':')[0] || cleanNumber;
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        fs.writeJsonSync(path.join(AUTH_DIR, 'pairing_status.json'), { status: 'connected', number: botNum });
+        fs.writeJsonSync(path.join(AUTH_DIR, 'otp.json'), { otp, number: botNum, time: Date.now() });
+        io.emit('botConnected', { number: botNum });
+        console.log(`[CONNECTED] Number: ${botNum} | OTP: ${otp}`);
+        try { const { startBot } = require('../src/bot'); startBot().catch(console.error); } catch(e) { console.error(e.message); }
       }
     });
-
   } catch (e) {
+    console.error('[PAIR ERROR]', e.message);
     res.json({ success: false, message: e.message });
   }
 });
 
-// ── GitHub Update ────────────────────────────────────────
-app.post('/api/update', requireAuth, async (req, res) => {
-  try {
-    const git = simpleGit('../');
-    await git.fetch();
-    const status = await git.status();
-    if (status.behind > 0) {
-      await git.pull();
-      res.json({ success: true, message: `Updated! ${status.behind} commits pulled. Restarting bot...` });
-      setTimeout(() => process.exit(0), 3000);
-    } else {
-      res.json({ success: true, message: 'Already up to date!' });
-    }
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
-});
-
-// ── Socket.io ────────────────────────────────────────────
+// Socket.io
 io.on('connection', (socket) => {
-  console.log('[PANEL] Client connected');
-  
-  // Send current status
-  try {
-    const status = fs.readJsonSync(`${AUTH_DIR}/pairing_status.json`);
-    socket.emit('statusUpdate', status);
-  } catch (e) {}
+  try { socket.emit('statusUpdate', fs.readJsonSync(path.join(AUTH_DIR, 'pairing_status.json'))); }
+  catch (e) { socket.emit('statusUpdate', { status: 'disconnected' }); }
 });
 
-// ── Watch pairing_status.json for changes ─────────────────
-fs.ensureDir(AUTH_DIR).then(() => {
-  const watchFile = `${AUTH_DIR}/pairing_status.json`;
-  if (fs.existsSync(watchFile)) {
-    fs.watchFile(watchFile, { interval: 1000 }, () => {
-      try {
-        const data = fs.readJsonSync(watchFile);
-        io.emit('statusUpdate', data);
-      } catch (e) {}
-    });
-  }
-});
-
-server.listen(PORT, () => {
-  console.log(`\n🌐 Panel running at: http://localhost:${PORT}\n`);
-});
+setInterval(() => {
+  const f = path.join(AUTH_DIR, 'pairing_status.json');
+  if (fs.existsSync(f)) { try { io.emit('statusUpdate', fs.readJsonSync(f)); } catch(e){} }
+}, 2000);
 
 // Auto-start bot if session exists
 setTimeout(() => {
-  const authCredsPath = AUTH_DIR + '/creds.json';
-  const fs2 = require('fs');
-  if (fs2.existsSync(authCredsPath)) {
-    console.log('[AUTO-START] Session found, starting bot...');
-    try {
-      const { startBot } = require('../src/bot');
-      startBot().catch(e => console.error('[AUTO-START ERROR]', e.message));
-    } catch (e) {
-      console.error('[AUTO-START ERROR]', e.message);
-    }
-  } else {
-    console.log('[AUTO-START] No session found. Please connect via panel.');
+  if (fs.existsSync(path.join(AUTH_DIR, 'creds.json'))) {
+    console.log('[AUTO-START] Session found...');
+    try { const { startBot } = require('../src/bot'); startBot().catch(console.error); }
+    catch(e) { console.error('[AUTO-START]', e.message); }
   }
-}, 2000);
+}, 3000);
+
+server.listen(PORT, '0.0.0.0', () => console.log(`\n✅ Panel: http://0.0.0.0:${PORT}\n`));
