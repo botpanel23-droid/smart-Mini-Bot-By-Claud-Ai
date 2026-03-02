@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WA-BOT | Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #00ff88;
+    --green2: #00cc66;
+    --dark: #050f0a;
+    --dark2: #0a1f14;
+    --card: #0d2b1a;
+    --border: #0f4024;
+    --text: #c8ffd8;
+    --glow: 0 0 20px rgba(0,255,136,0.4);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--dark);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  /* Animated background grid */
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridMove 20s linear infinite;
+  }
+  @keyframes gridMove { 0%{transform:translateY(0)} 100%{transform:translateY(40px)} }
+
+  .container {
+    position: relative;
+    width: 420px;
+    padding: 40px;
+    background: rgba(13,43,26,0.9);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    box-shadow: var(--glow), 0 0 60px rgba(0,255,136,0.1);
+  }
+  .logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .logo-icon {
+    font-size: 56px;
+    display: block;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 0 20px rgba(0,255,136,0.8));
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+  .logo h1 {
+    font-family: 'Orbitron', sans-serif;
+    color: var(--green);
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    text-shadow: var(--glow);
+  }
+  .logo p { color: #5a9a6a; font-size: 13px; letter-spacing: 2px; margin-top: 4px; }
+
+  .step-info {
+    background: rgba(0,255,136,0.05);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    color: #7abf8a;
+    line-height: 1.6;
+  }
+  .step-info strong { color: var(--green); }
+
+  .form-group { margin-bottom: 18px; }
+  label {
+    display: block;
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  input {
+    width: 100%;
+    padding: 14px 16px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 16px;
+    transition: all 0.3s;
+    letter-spacing: 1px;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--green);
+    box-shadow: 0 0 15px rgba(0,255,136,0.2);
+    background: rgba(0,255,136,0.03);
+  }
+  input::placeholder { color: #2a5a3a; }
+
+  .btn {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(135deg, var(--green), var(--green2));
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-top: 8px;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: var(--glow); }
+  .btn:active { transform: translateY(0); }
+
+  .connect-link {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: #5a9a6a;
+  }
+  .connect-link a {
+    color: var(--green);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .connect-link a:hover { text-shadow: var(--glow); }
+
+  .error-msg {
+    background: rgba(255,50,50,0.1);
+    border: 1px solid rgba(255,50,50,0.3);
+    color: #ff6666;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-top: 12px;
+    display: none;
+    text-align: center;
+  }
+  .error-msg.show { display: block; }
+
+  .scanner { 
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    animation: scan 3s ease-in-out infinite;
+  }
+  @keyframes scan {
+    0%,100%{top:0;opacity:0} 10%,90%{opacity:1} 50%{top:calc(100% - 2px)}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="scanner"></div>
+  <div class="logo">
+    <span class="logo-icon">🤖</span>
+    <h1>WA-BOT</h1>
+    <p>CONTROL PANEL</p>
+  </div>
+
+  <div class="step-info">
+    📱 Bot connect කරලා, ඔබේ inbox එකට ආ<br>
+    <strong>Number</strong> සහ <strong>OTP</strong> ගහලා login වන්න
+  </div>
+
+  <div class="form-group">
+    <label>📞 Bot Number</label>
+    <input type="tel" id="number" placeholder="94771234567" />
+  </div>
+  <div class="form-group">
+    <label>🔐 OTP Code</label>
+    <input type="text" id="otp" placeholder="123456" maxlength="6" />
+  </div>
+
+  <button class="btn" onclick="login()">⚡ LOGIN TO PANEL</button>
+
+  <div class="error-msg" id="errMsg">❌ Invalid number or OTP!</div>
+
+  <div class="connect-link">
+    Bot connect නෑද? <a href="/connect">Connect Bot →</a>
+  </div>
+</div>
+
+<script>
+async function login() {
+  const number = document.getElementById('number').value.trim();
+  const otp = document.getElementById('otp').value.trim();
+  if (!number || !otp) { showError('Number සහ OTP enter කරන්න!'); return; }
+  
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ number, otp })
+  });
+  const data = await res.json();
+  if (data.success) window.location.href = '/';
+  else showError(data.message || 'Invalid credentials!');
+}
+
+function showError(msg) {
+  const el = document.getElementById('errMsg');
+  el.textContent = '❌ ' + msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+document.addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
+</script>
+</body>
+</html>
