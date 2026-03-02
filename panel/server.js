@@ -13,29 +13,36 @@ const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
-const AUTH_DIR = '../auth_info';
+const AUTH_DIR = path.join(__dirname, '../auth_info');
 const CONFIG_FILE = '../src/config.js';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: 'wabot-panel-secret-2024',
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Auth Middleware ──────────────────────────────────────
 function requireAuth(req, res, next) {
-  if (req.session.authenticated) return next();
-  res.redirect('/login');
+  if (req.session && req.session.authenticated) return next();
+  // Check if bot is already connected - if yes go to login, else go to connect
+  const statusFile = AUTH_DIR + '/pairing_status.json';
+  const fs2 = require('fs');
+  try {
+    const status = JSON.parse(fs2.readFileSync(statusFile, 'utf8'));
+    if (status.status === 'connected') return res.redirect('/login');
+  } catch(e) {}
+  res.redirect('/connect');
 }
 
 // ── Routes ──────────────────────────────────────────────
 app.get('/', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public/login.html')));
-app.get('/connect', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public/connect.html')));
+app.get('/connect', (req, res) => res.sendFile(path.join(__dirname, 'public/connect.html')));
 
 app.post('/api/login', (req, res) => {
   const { number, otp } = req.body;
